@@ -1143,32 +1143,12 @@
             );
         }
 
-        // Кнопка в меню (зліва)
-        function add() {
-            var button = $('<li class="menu__item selector" data-action="filmix"><div class="menu__ico"><svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 2L2 10v16l16 8 16-8V10L18 2z" fill="white"/></svg></div><div class="menu__text">Filmix</div></li>');
+        // Кнопка в меню (ВИДАЛЕНА!)
+        // function add() { ... }
+        // Ми прибрали додавання кнопки в меню зліва, 
+        // бо вона там заважає.
 
-            button.on('hover:enter', function() {
-                resetTemplates();
-                Lampa.Component.add('filmix', component);
-                Lampa.Activity.push({
-                    url: '',
-                    title: 'Filmix',
-                    component: 'filmix',
-                    page: 1
-                });
-            });
-
-            $('.menu .menu__list').eq(0).append(button);
-        }
-
-        if (window.appready) add();
-        else {
-            Lampa.Listener.follow('app', function(e) {
-                if (e.type == 'ready') add();
-            });
-        }
-
-        // Кнопка на картці фільму (як в оригіналі)
+        // Кнопка на картці фільму (Покращена логіка вставки)
         Lampa.Listener.follow('full', function(e) {
             if (e.type == 'complite') {
                 var btn = $('<div class="full-start__button selector view--filmix" data-subtitle="Filmix v' + manifest.version + '"><svg width="135" height="147" viewBox="0 0 135 147" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M121.5 96.8823C139.5 86.49 139.5 60.5092 121.5 50.1169L41.25 3.78454C23.25 -6.60776 0.750004 6.38265 0.750001 27.1673L0.75 51.9742C4.70314 35.7475 23.6209 26.8138 39.0547 35.7701L94.8534 68.1505C110.252 77.0864 111.909 97.8693 99.8725 109.369L121.5 96.8823Z" fill="currentColor"/><path d="M63 84.9836C80.3333 94.991 80.3333 120.01 63 130.017L39.75 143.44C22.4167 153.448 0.749999 140.938 0.75 120.924L0.750001 94.0769C0.750002 74.0621 22.4167 61.5528 39.75 71.5602L63 84.9836Z" fill="currentColor"/></svg><span>Filmix</span></div>');
@@ -1188,7 +1168,13 @@
                     });
                 });
 
-                e.object.activity.render().find('.view--torrent').after(btn);
+                // Вставляємо кнопку після торрентів, або в кінець списку, якщо торрентів немає
+                var torrent_btn = e.object.activity.render().find('.view--torrent');
+                if (torrent_btn.length) {
+                    torrent_btn.after(btn);
+                } else {
+                    e.object.activity.render().find('.full-start__buttons').append(btn);
+                }
             }
         });
     }
