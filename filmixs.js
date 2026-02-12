@@ -7,13 +7,13 @@
         unic_id = Lampa.Utils.uid(16);
         Lampa.Storage.set('fxapi_uid', unic_id);
     }
-    
+
     var proxy_url = 'http://cors.byskaz.ru/';
     var api_url = 'http://filmixapp.vip/api/v2/';
     var dev_token = 'user_dev_apk=2.0.1&user_dev_id=' + unic_id + '&user_dev_name=Lampa&user_dev_os=11&user_dev_vendor=FXAPI&user_dev_token=';
     var modalopen = false;
     var ping_auth;
-    
+
     // Кеш для результатів пошуку
     var search_cache = {};
     var cache_timeout = 1000 * 60 * 30; // 30 хвилин
@@ -22,16 +22,16 @@
     function getOptimalQuality() {
         var connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
         var speed = Lampa.Storage.get('network_speed', 'auto');
-        
+
         if (speed !== 'auto') return parseInt(speed);
-        
+
         if (connection) {
             var effectiveType = connection.effectiveType;
             if (effectiveType === '4g') return 1080;
             if (effectiveType === '3g') return 720;
             if (effectiveType === '2g') return 480;
         }
-        
+
         return 1080;
     }
 
@@ -53,15 +53,15 @@
             var user_token = '';
             var auth_timestamp = Lampa.Storage.get('fxapi_auth_time', 0);
             var current_time = Date.now();
-            
+
             if (current_time - auth_timestamp < 30 * 24 * 60 * 60 * 1000) {
                 fxapi_token = Lampa.Storage.get('fxapi_token', '');
             }
-            
+
             modalopen = true;
 
             var modal = $('<div><div class="broadcast__text">Для використання Filmix введіть код на сайті <b>filmix.my/consoles</b></div><div class="broadcast__device selector" style="text-align: center; background-color: darkslategrey; color: white;">Очікування...</div><br><div class="broadcast__scan"><div></div></div></div></div>');
-            
+
             function openModal(){
                 var contrl = Lampa.Controller.enabled().name
                 Lampa.Modal.open({
@@ -93,7 +93,7 @@
                     }
                 }, function(a, c) {});
             }, 2000);
-            
+
             network.quiet(Lampa.Utils.addUrlComponent(api_url + 'token_request', dev_token), function(found) {
                 if (found.status == 'ok') {
                     user_token = found.code;
@@ -114,7 +114,7 @@
         this.search = function(_object, sim) {
             if (wait_similars) this.find(sim[0].id);
         };
-        
+
         function normalizeString(str) {
             return str.toLowerCase().replace(/[^a-zа-я0-9]/g, '');
         }
@@ -122,10 +122,10 @@
         this.searchByTitle = function(_object, query) {
             var _this = this;
             object = _object;
-            
+
             var cache_key = 'filmix_search_' + query;
             var cached = search_cache[cache_key];
-            
+
             if (cached && (Date.now() - cached.timestamp < cache_timeout)) {
                 console.log('Використання кешованих результатів для:', query);
                 processSearchResults(cached.data);
@@ -137,7 +137,7 @@
             var url = api_url + 'search';
             url = Lampa.Utils.addUrlComponent(url, 'story=' + encodeURIComponent(query));
             url = Lampa.Utils.addUrlComponent(url, dev_token + fxapi_token);
-            
+
             network.clear();
             network.timeout(15000);
             network.silent(url, function(json) {
@@ -155,13 +155,13 @@
                     component.doesNotAnswer();
                 }
             });
-            
+
             function processSearchResults(json) {
                 var cards = json.filter(function(c) {
                     c.year = parseInt(c.alt_name.split('-').pop());
                     return c.year > year - 2 && c.year < year + 2;
                 });
-                
+
                 var card = cards.find(function(c) {
                     return c.year == year && normalizeString(c.original_title) == normalizeString(orig);
                 });
@@ -392,7 +392,7 @@
             var voice_with_info = filter_items.voice.map(function(v, i) {
                 return { name: v, info: filter_items.voice_info[i] };
             });
-            
+
             voice_with_info.sort(function(a, b) {
                 var aUkr = a.name.toLowerCase().includes('ukr') || a.name.toLowerCase().includes('україн');
                 var bUkr = b.name.toLowerCase().includes('ukr') || b.name.toLowerCase().includes('україн');
@@ -400,7 +400,7 @@
                 if (!aUkr && bUkr) return 1;
                 return a.name.localeCompare(b.name);
             });
-            
+
             filter_items.voice = voice_with_info.map(function(v) { return v.name; });
             filter_items.voice_info = voice_with_info.map(function(v) { return v.info; });
 
@@ -564,10 +564,482 @@
             data[selected_id || object.movie.id] = choice;
             Lampa.Storage.set('online_choice_' + (for_balanser || balanser), data);
         };
-        
-        // ... пропущено функції similars, clearImages, reset, loading, filter, closeFilter, selected, getEpisodes, append, watched, draw ...
-        // Повний код цих функцій є у попередньому файлі, який я створив (filmix_improved.js), 
-        // тут головне - це закінчення:
+
+        this.similars = function(json) {
+            var _this3 = this;
+            json.forEach(function(elem) {
+                var info = [];
+                var year = ((elem.start_date || elem.year || '') + '').slice(0, 4);
+                if (elem.rating && elem.rating !== 'null' && elem.filmId) info.push('<span class="online-prestige-rate">⭐ ' + elem.rating + '</span>');
+                if (year) info.push(year);
+                if (elem.countries && elem.countries.length) {
+                    info.push((elem.filmId ? elem.countries.map(function(c) {
+                        return c.country;
+                    }) : elem.countries).join(', '));
+                }
+                if (elem.categories && elem.categories.length) {
+                    info.push(elem.categories.slice(0, 4).join(', '));
+                }
+                var name = elem.title || elem.ru_title || elem.en_title || elem.nameRu || elem.nameEn;
+                var orig = elem.orig_title || elem.nameEn || '';
+                elem.title = name + (orig && orig !== name ? ' / ' + orig : '');
+                elem.time = elem.filmLength || '';
+                elem.info = info.join('<span class="online-prestige-split"> • </span>');
+                var item = Lampa.Template.get('online_prestige_folder', elem);
+                item.on('hover:enter', function() {
+                    _this3.activity.loader(true);
+                    _this3.reset();
+                    object.search_date = year;
+                    selected_id = elem.id;
+                    _this3.extendChoice();
+                    if (source.search) {
+                        source.search(object, [elem]);
+                    } else {
+                        _this3.doesNotAnswer();
+                    }
+                }).on('hover:focus', function(e) {
+                    last = e.target;
+                    scroll.update($(e.target), true);
+                });
+                scroll.append(item);
+            });
+        };
+
+        this.clearImages = function() {
+            images.forEach(function(img) {
+                img.onerror = function() {};
+                img.onload = function() {};
+                img.src = '';
+            });
+            images = [];
+        };
+
+        this.reset = function() {
+            last = false;
+            clearInterval(balanser_timer);
+            network.clear();
+            this.clearImages();
+            scroll.render().find('.empty').remove();
+            scroll.clear();
+        };
+
+        this.loading = function(status) {
+            if (status) this.activity.loader(true);
+            else {
+                this.activity.loader(false);
+                this.activity.toggle();
+            }
+        };
+
+        this.closeFilter = function() {
+            if ($('body').hasClass('selectbox--open')) Lampa.Select.close();
+        };
+
+        this.selected = function(filter_items) {
+            var need = this.getChoice(),
+                select = [];
+            for (var i in need) {
+                if (filter_items[i] && filter_items[i].length) {
+                    if (i == 'voice') {
+                        select.push(filter_translate[i] + ': ' + filter_items[i][need[i]]);
+                    } else if (i !== 'source') {
+                        if (filter_items.season.length >= 1) {
+                            select.push(filter_translate.season + ': ' + filter_items[i][need[i]]);
+                        }
+                    }
+                }
+            }
+            filter.chosen('filter', select);
+            filter.chosen('sort', [balanser]);
+        };
+
+        this.getEpisodes = function(season, call) {
+            var episodes = [];
+            if (typeof object.movie.id == 'number' && object.movie.name) {
+                var tmdburl = 'tv/' + object.movie.id + '/season/' + season + '?api_key=' + Lampa.TMDB.key() + '&language=' + Lampa.Storage.get('language', 'uk');
+                var baseurl = Lampa.TMDB.api(tmdburl);
+                network.timeout(1000 * 10);
+                network["native"](baseurl, function(data) {
+                    episodes = data.episodes || [];
+                    call(episodes);
+                }, function(a, c) {
+                    call(episodes);
+                });
+            } else call(episodes);
+        };
+
+        this.append = function(item) {
+            item.on('hover:focus', function(e) {
+                last = e.target;
+                scroll.update($(e.target), true);
+            });
+            scroll.append(item);
+        };
+
+        this.watched = function(set) {
+            var file_id = Lampa.Utils.hash(object.movie.number_of_seasons ? object.movie.original_name : object.movie.original_title);
+            var watched = Lampa.Storage.cache('online_watched_last', 5000, {});
+            if (set) {
+                if (!watched[file_id]) watched[file_id] = {};
+                Lampa.Arrays.extend(watched[file_id], set, true);
+                Lampa.Storage.set('online_watched_last', watched);
+            } else {
+                return watched[file_id];
+            }
+        };
+
+        this.draw = function(items) {
+            var _this5 = this;
+            var params = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+            if (!items.length) return this.empty();
+            this.getEpisodes(items[0].season, function(episodes) {
+                var viewed = Lampa.Storage.cache('online_view', 5000, []);
+                var serial = object.movie.name ? true : false;
+                var choice = _this5.getChoice();
+                var fully = window.innerWidth > 480;
+                var scroll_to_element = false;
+                var scroll_to_mark = false;
+                items.forEach(function(element, index) {
+                    var episode = serial && episodes.length && !params.similars ? episodes.find(function(e) {
+                        return e.episode_number == element.episode;
+                    }) : false;
+                    var episode_num = element.episode || index + 1;
+                    var episode_last = choice.episodes_view[element.season];
+                    Lampa.Arrays.extend(element, {
+                        info: '',
+                        quality: '',
+                        time: Lampa.Utils.secondsToTime((episode ? episode.runtime : object.movie.runtime) * 60, true)
+                    });
+                    var hash_timeline = Lampa.Utils.hash(element.season ? [element.season, element.episode, object.movie.original_title].join('') : object.movie.original_title);
+                    var hash_behold = Lampa.Utils.hash(element.season ? [element.season, element.episode, object.movie.original_title, element.voice_name].join('') : object.movie.original_title + element.voice_name);
+                    var data = {
+                        hash_timeline: hash_timeline,
+                        hash_behold: hash_behold
+                    };
+                    var info = [];
+                    if (element.season) {
+                        element.translate_episode_end = _this5.getLastEpisode(items);
+                        element.translate_voice = element.voice_name;
+                    }
+                    element.timeline = Lampa.Timeline.view(hash_timeline);
+                    if (episode) {
+                        element.title = episode.name;
+                        if (element.info.length < 30 && episode.vote_average) info.push('<span class="online-prestige-rate">⭐ ' + parseFloat(episode.vote_average + '').toFixed(1) + '</span>');
+                        if (episode.air_date && fully) info.push(Lampa.Utils.parseTime(episode.air_date).full);
+                    } else if (object.movie.release_date && fully) {
+                        info.push(Lampa.Utils.parseTime(object.movie.release_date).full);
+                    }
+                    if (!serial && object.movie.tagline && element.info.length < 30) info.push(object.movie.tagline);
+                    if (element.info) info.push(element.info);
+                    if (info.length) element.info = info.map(function(i) {
+                        return '<span>' + i + '</span>';
+                    }).join('<span class="online-prestige-split"> • </span>');
+                    var html = Lampa.Template.get('online_prestige_full', element);
+                    var loader = html.find('.online-prestige__loader');
+                    var image = html.find('.online-prestige__img');
+                    if (!serial) {
+                        if (choice.movie_view == hash_behold) scroll_to_element = html;
+                    } else if (typeof episode_last !== 'undefined' && episode_last == episode_num) {
+                        scroll_to_element = html;
+                    }
+                    if (serial && !episode) {
+                        image.append('<div class="online-prestige__episode-number">' + ('0' + (element.episode || index + 1)).slice(-2) + '</div>');
+                        loader.remove();
+                    } else {
+                        var img = html.find('img')[0];
+                        img.onerror = function() {
+                            img.src = './img/img_broken.svg';
+                        };
+                        img.onload = function() {
+                            image.addClass('online-prestige__img--loaded');
+                            loader.remove();
+                            if (serial) image.append('<div class="online-prestige__episode-number">' + ('0' + (element.episode || index + 1)).slice(-2) + '</div>');
+                        };
+                        img.src = Lampa.TMDB.image('t/p/w300' + (episode ? episode.still_path : object.movie.backdrop_path));
+                        images.push(img);
+                    }
+                    html.find('.online-prestige__timeline').append(Lampa.Timeline.render(element.timeline));
+                    if (viewed.indexOf(hash_behold) !== -1) {
+                        scroll_to_mark = html;
+                        html.find('.online-prestige__img').append('<div class="online-prestige__viewed">✓</div>');
+                    }
+                    element.mark = function() {
+                        viewed = Lampa.Storage.cache('online_view', 5000, []);
+                        if (viewed.indexOf(hash_behold) == -1) {
+                            viewed.push(hash_behold);
+                            Lampa.Storage.set('online_view', viewed);
+                            if (html.find('.online-prestige__viewed').length == 0) {
+                                html.find('.online-prestige__img').append('<div class="online-prestige__viewed">✓</div>');
+                            }
+                        }
+                        choice = _this5.getChoice();
+                        if (!serial) {
+                            choice.movie_view = hash_behold;
+                        } else {
+                            choice.episodes_view[element.season] = episode_num;
+                        }
+                        _this5.saveChoice(choice);
+                        _this5.watched({
+                            balanser: balanser,
+                            balanser_name: 'Filmix',
+                            voice_id: choice.voice_id,
+                            voice_name: choice.voice_name || element.voice_name,
+                            episode: element.episode,
+                            season: element.season
+                        });
+                    };
+                    element.unmark = function() {
+                        viewed = Lampa.Storage.cache('online_view', 5000, []);
+                        if (viewed.indexOf(hash_behold) !== -1) {
+                            Lampa.Arrays.remove(viewed, hash_behold);
+                            Lampa.Storage.set('online_view', viewed);
+                            if (Lampa.Manifest.app_digital >= 177) Lampa.Storage.remove('online_view', hash_behold);
+                            html.find('.online-prestige__viewed').remove();
+                        }
+                    };
+                    element.timeclear = function() {
+                        element.timeline.percent = 0;
+                        element.timeline.time = 0;
+                        element.timeline.duration = 0;
+                        Lampa.Timeline.update(element.timeline);
+                    };
+                    html.on('hover:enter', function() {
+                        if (object.movie.id) Lampa.Favorite.add('history', object.movie, 100);
+                        if (params.onEnter) params.onEnter(element, html, data);
+                    }).on('hover:focus', function(e) {
+                        last = e.target;
+                        if (params.onFocus) params.onFocus(element, html, data);
+                        scroll.update($(e.target), true);
+                    });
+                    if (params.onRender) params.onRender(element, html, data);
+                    _this5.contextMenu({
+                        html: html,
+                        element: element,
+                        onFile: function onFile(call) {
+                            if (params.onContextMenu) params.onContextMenu(element, html, data, call);
+                        },
+                        onClearAllMark: function onClearAllMark() {
+                            items.forEach(function(elem) {
+                                elem.unmark();
+                            });
+                        },
+                        onClearAllTime: function onClearAllTime() {
+                            items.forEach(function(elem) {
+                                elem.timeclear();
+                            });
+                        }
+                    });
+                    scroll.append(html);
+                });
+                if (serial && episodes.length > items.length && !params.similars) {
+                    var left = episodes.slice(items.length);
+                    left.forEach(function(episode) {
+                        var info = [];
+                        if (episode.vote_average) info.push('<span class="online-prestige-rate">⭐ ' + parseFloat(episode.vote_average + '').toFixed(1) + '</span>');
+                        if (episode.air_date) info.push(Lampa.Utils.parseTime(episode.air_date).full);
+                        var air = new Date((episode.air_date + '').replace(/-/g, '/'));
+                        var now = Date.now();
+                        var day = Math.round((air.getTime() - now) / (24 * 60 * 60 * 1000));
+                        var txt = 'Вийде через: ' + day + ' днів';
+                        var html = Lampa.Template.get('online_prestige_full', {
+                            time: Lampa.Utils.secondsToTime((episode ? episode.runtime : object.movie.runtime) * 60, true),
+                            info: info.length ? info.map(function(i) {
+                                return '<span>' + i + '</span>';
+                            }).join('<span class="online-prestige-split"> • </span>') : '',
+                            title: episode.name,
+                            quality: day > 0 ? txt : ''
+                        });
+                        var loader = html.find('.online-prestige__loader');
+                        var image = html.find('.online-prestige__img');
+                        var season = items[0] ? items[0].season : 1;
+                        html.find('.online-prestige__timeline').append(Lampa.Timeline.render(Lampa.Timeline.view(Lampa.Utils.hash([season, episode.episode_number, object.movie.original_title].join('')))));
+                        var img = html.find('img')[0];
+                        if (episode.still_path) {
+                            img.onerror = function() {
+                                img.src = './img/img_broken.svg';
+                            };
+                            img.onload = function() {
+                                image.addClass('online-prestige__img--loaded');
+                                loader.remove();
+                                image.append('<div class="online-prestige__episode-number">' + ('0' + episode.episode_number).slice(-2) + '</div>');
+                            };
+                            img.src = Lampa.TMDB.image('t/p/w300' + episode.still_path);
+                            images.push(img);
+                        } else {
+                            loader.remove();
+                            image.append('<div class="online-prestige__episode-number">' + ('0' + episode.episode_number).slice(-2) + '</div>');
+                        }
+                        html.on('hover:focus', function(e) {
+                            last = e.target;
+                            scroll.update($(e.target), true);
+                        });
+                        scroll.append(html);
+                    });
+                }
+                if (scroll_to_element) {
+                    last = scroll_to_element[0];
+                } else if (scroll_to_mark) {
+                    last = scroll_to_mark[0];
+                }
+                Lampa.Controller.enable('content');
+            });
+        };
+
+        this.contextMenu = function(params) {
+            params.html.on('hover:long', function() {
+                function show(extra) {
+                    var enabled = Lampa.Controller.enabled().name;
+                    var menu = [];
+                    if (Lampa.Platform.is('webos')) {
+                        menu.push({
+                            title: 'Відкрити у - Webos',
+                            player: 'webos'
+                        });
+                    }
+                    if (Lampa.Platform.is('android')) {
+                        menu.push({
+                            title: 'Відкрити у - Android',
+                            player: 'android'
+                        });
+                    }
+                    menu.push({
+                        title: 'Відкрити у - Lampa',
+                        player: 'lampa'
+                    });
+                    menu.push({
+                        title: 'Відео',
+                        separator: true
+                    });
+                    menu.push({
+                        title: 'Позначити переглянутим',
+                        mark: true
+                    });
+                    menu.push({
+                        title: 'Зняти позначку',
+                        unmark: true
+                    });
+                    menu.push({
+                        title: 'Скинути час',
+                        timeclear: true
+                    });
+                    if (extra) {
+                        menu.push({
+                            title: 'Копіювати посилання',
+                            copylink: true
+                        });
+                    }
+                    menu.push({
+                        title: 'Інше',
+                        separator: true
+                    });
+                    if (Lampa.Account.logged() && params.element && typeof params.element.season !== 'undefined' && params.element.translate_voice) {
+                        menu.push({
+                            title: 'Підписатися на озвучку',
+                            subscribe: true
+                        });
+                    }
+                    menu.push({
+                        title: 'Зняти всі позначки',
+                        clearallmark: true
+                    });
+                    menu.push({
+                        title: 'Скинути всі таймкоди',
+                        timeclearall: true
+                    });
+                    Lampa.Select.show({
+                        title: 'Дії',
+                        items: menu,
+                        onBack: function onBack() {
+                            Lampa.Controller.toggle(enabled);
+                        },
+                        onSelect: function onSelect(a) {
+                            if (a.mark) params.element.mark();
+                            if (a.unmark) params.element.unmark();
+                            if (a.timeclear) params.element.timeclear();
+                            if (a.clearallmark) params.onClearAllMark();
+                            if (a.timeclearall) params.onClearAllTime();
+                            Lampa.Controller.toggle(enabled);
+                            if (a.player) {
+                                Lampa.Player.runas(a.player);
+                                params.html.trigger('hover:enter');
+                            }
+                            if (a.copylink) {
+                                if (extra.quality) {
+                                    var qual = [];
+                                    for (var i in extra.quality) {
+                                        qual.push({
+                                            title: i,
+                                            file: extra.quality[i]
+                                        });
+                                    }
+                                    Lampa.Select.show({
+                                        title: 'Посилання',
+                                        items: qual,
+                                        onBack: function onBack() {
+                                            Lampa.Controller.toggle(enabled);
+                                        },
+                                        onSelect: function onSelect(b) {
+                                            Lampa.Utils.copyTextToClipboard(b.file, function() {
+                                                Lampa.Noty.show('Посилання скопійовано');
+                                            }, function() {
+                                                Lampa.Noty.show('Помилка копіювання');
+                                            });
+                                        }
+                                    });
+                                } else {
+                                    Lampa.Utils.copyTextToClipboard(extra.file, function() {
+                                        Lampa.Noty.show('Посилання скопійовано');
+                                    }, function() {
+                                        Lampa.Noty.show('Помилка копіювання');
+                                    });
+                                }
+                            }
+                            if (a.subscribe) {
+                                Lampa.Account.subscribeToTranslation({
+                                    card: object.movie,
+                                    season: params.element.season,
+                                    episode: params.element.translate_episode_end,
+                                    voice: params.element.translate_voice
+                                }, function() {
+                                    Lampa.Noty.show('Підписка оформлена');
+                                }, function() {
+                                    Lampa.Noty.show('Помилка підписки');
+                                });
+                            }
+                        }
+                    });
+                }
+                params.onFile(show);
+            }).on('hover:focus', function() {
+                if (Lampa.Helper) Lampa.Helper.show('online_file', 'Утримуйте клавішу "ОК" щоб відкрити меню', params.html);
+            });
+        };
+
+        this.empty = function(msg) {
+            var html = Lampa.Template.get('online_does_not_answer', {});
+            html.find('.online-empty__buttons').remove();
+            html.find('.online-empty__title').text('Нічого не знайдено');
+            scroll.append(html);
+            this.loading(false);
+        };
+
+        this.doesNotAnswer = function() {
+            var _this6 = this;
+            this.reset();
+            var html = Lampa.Template.get('online_does_not_answer', {
+                balanser: 'Filmix'
+            });
+            scroll.append(html);
+            this.loading(false);
+        };
+
+        this.getLastEpisode = function(items) {
+            var last_episode = 0;
+            items.forEach(function(e) {
+                if (typeof e.episode !== 'undefined') last_episode = Math.max(last_episode, parseInt(e.episode));
+            });
+            return last_episode;
+        };
 
         this.render = function() { return files.render(); };
         this.start = function() {
@@ -602,9 +1074,9 @@
     function startPlugin() {
         window.plugin_filmix_ready = true;
         window.fxapi = { max_qualitie: 1080 };
-        
+
         Lampa.Component.add('filmix', component);
-        
+
         var manifest = {
             type: 'video',
             version: '1.2.0',
@@ -613,13 +1085,71 @@
             component: 'filmix',
             icon: '<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 2L2 10v16l16 8 16-8V10L18 2z" fill="white"/></svg>'
         };
-        
+
         Lampa.Manifest.plugins = manifest;
 
+        function resetTemplates() {
+            Lampa.Template.add('online_prestige_full', 
+                '<div class="online-prestige online-prestige--full selector">' +
+                    '<div class="online-prestige__img">' +
+                        '<img alt="">' +
+                        '<div class="online-prestige__loader"></div>' +
+                    '</div>' +
+                    '<div class="online-prestige__body">' +
+                        '<div class="online-prestige__head">' +
+                            '<div class="online-prestige__title">{title}</div>' +
+                            '<div class="online-prestige__time">{time}</div>' +
+                        '</div>' +
+                        '<div class="online-prestige__timeline"></div>' +
+                        '<div class="online-prestige__footer">' +
+                            '<div class="online-prestige__info">{info}</div>' +
+                            '<div class="online-prestige__quality">{quality}</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>'
+            );
+
+            Lampa.Template.add('online_prestige_folder',
+                '<div class="online-prestige online-prestige--folder selector">' +
+                    '<div class="online-prestige__folder">' +
+                        '<svg width="128" height="112" viewBox="0 0 128 112" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+                            '<rect y="20" width="128" height="92" rx="13" fill="white"/>' +
+                            '<path d="M29.9963 8H98.0037C96.0446 3.3021 91.4079 0 86 0H42C36.5921 0 31.9554 3.3021 29.9963 8Z" fill="white" fill-opacity="0.23"/>' +
+                            '<rect x="11" y="8" width="106" height="76" rx="13" fill="white" fill-opacity="0.51"/>' +
+                        '</svg>' +
+                    '</div>' +
+                    '<div class="online-prestige__body">' +
+                        '<div class="online-prestige__head">' +
+                            '<div class="online-prestige__title">{title}</div>' +
+                            '<div class="online-prestige__time">{time}</div>' +
+                        '</div>' +
+                        '<div class="online-prestige__footer">' +
+                            '<div class="online-prestige__info">{info}</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>'
+            );
+
+            Lampa.Template.add('online_does_not_answer',
+                '<div class="online-empty">' +
+                    '<div class="online-empty__title">Filmix не відповідає</div>' +
+                    '<div class="online-empty__time">Спробуйте пізніше</div>' +
+                    '<div class="online-empty__buttons"></div>' +
+                '</div>'
+            );
+
+            Lampa.Template.add('online_prestige_rate',
+                '<div class="online-prestige-rate"><span>{rate}</span></div>'
+            );
+        }
+
+        // Кнопка в меню (зліва)
         function add() {
             var button = $('<li class="menu__item selector" data-action="filmix"><div class="menu__ico"><svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 2L2 10v16l16 8 16-8V10L18 2z" fill="white"/></svg></div><div class="menu__text">Filmix</div></li>');
-            
+
             button.on('hover:enter', function() {
+                resetTemplates();
+                Lampa.Component.add('filmix', component);
                 Lampa.Activity.push({
                     url: '',
                     title: 'Filmix',
@@ -627,7 +1157,7 @@
                     page: 1
                 });
             });
-            
+
             $('.menu .menu__list').eq(0).append(button);
         }
 
@@ -638,58 +1168,29 @@
             });
         }
 
-        Lampa.Template.add('online_prestige_full', 
-            '<div class="online-prestige online-prestige--full selector">' +
-                '<div class="online-prestige__img">' +
-                    '<img alt="">' +
-                    '<div class="online-prestige__loader"></div>' +
-                '</div>' +
-                '<div class="online-prestige__body">' +
-                    '<div class="online-prestige__head">' +
-                        '<div class="online-prestige__title">{title}</div>' +
-                        '<div class="online-prestige__time">{time}</div>' +
-                    '</div>' +
-                    '<div class="online-prestige__timeline"></div>' +
-                    '<div class="online-prestige__footer">' +
-                        '<div class="online-prestige__info">{info}</div>' +
-                        '<div class="online-prestige__quality">{quality}</div>' +
-                    '</div>' +
-                '</div>' +
-            '</div>'
-        );
+        // Кнопка на картці фільму (як в оригіналі)
+        Lampa.Listener.follow('full', function(e) {
+            if (e.type == 'complite') {
+                var btn = $('<div class="full-start__button selector view--filmix" data-subtitle="Filmix v' + manifest.version + '"><svg width="135" height="147" viewBox="0 0 135 147" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M121.5 96.8823C139.5 86.49 139.5 60.5092 121.5 50.1169L41.25 3.78454C23.25 -6.60776 0.750004 6.38265 0.750001 27.1673L0.75 51.9742C4.70314 35.7475 23.6209 26.8138 39.0547 35.7701L94.8534 68.1505C110.252 77.0864 111.909 97.8693 99.8725 109.369L121.5 96.8823Z" fill="currentColor"/><path d="M63 84.9836C80.3333 94.991 80.3333 120.01 63 130.017L39.75 143.44C22.4167 153.448 0.749999 140.938 0.75 120.924L0.750001 94.0769C0.750002 74.0621 22.4167 61.5528 39.75 71.5602L63 84.9836Z" fill="currentColor"/></svg><span>Filmix</span></div>');
 
-        Lampa.Template.add('online_prestige_folder',
-            '<div class="online-prestige online-prestige--folder selector">' +
-                '<div class="online-prestige__folder">' +
-                    '<svg width="128" height="112" viewBox="0 0 128 112" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-                        '<rect y="20" width="128" height="92" rx="13" fill="white"/>' +
-                        '<path d="M29.9963 8H98.0037C96.0446 3.3021 91.4079 0 86 0H42C36.5921 0 31.9554 3.3021 29.9963 8Z" fill="white" fill-opacity="0.23"/>' +
-                        '<rect x="11" y="8" width="106" height="76" rx="13" fill="white" fill-opacity="0.51"/>' +
-                    '</svg>' +
-                '</div>' +
-                '<div class="online-prestige__body">' +
-                    '<div class="online-prestige__head">' +
-                        '<div class="online-prestige__title">{title}</div>' +
-                        '<div class="online-prestige__time">{time}</div>' +
-                    '</div>' +
-                    '<div class="online-prestige__footer">' +
-                        '<div class="online-prestige__info">{info}</div>' +
-                    '</div>' +
-                '</div>' +
-            '</div>'
-        );
+                btn.on('hover:enter', function() {
+                    resetTemplates();
+                    Lampa.Component.add('filmix', component);
+                    Lampa.Activity.push({
+                        url: '',
+                        title: 'Filmix',
+                        component: 'filmix',
+                        search: e.data.movie.title,
+                        search_one: e.data.movie.title,
+                        search_two: e.data.movie.original_title,
+                        movie: e.data.movie,
+                        page: 1
+                    });
+                });
 
-        Lampa.Template.add('online_does_not_answer',
-            '<div class="online-empty">' +
-                '<div class="online-empty__title">Filmix не відповідає</div>' +
-                '<div class="online-empty__time">Спробуйте пізніше</div>' +
-                '<div class="online-empty__buttons"></div>' +
-            '</div>'
-        );
-
-        Lampa.Template.add('online_prestige_rate',
-            '<div class="online-prestige-rate"><span>{rate}</span></div>'
-        );
+                e.object.activity.render().find('.view--torrent').after(btn);
+            }
+        });
     }
 
     if (window.Lampa) startPlugin();
